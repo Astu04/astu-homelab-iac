@@ -1,0 +1,6 @@
+---
+- name: Configure Backup Fortress
+  hosts: backup_pi
+  become: yes
+  roles:
+    - backup_engine

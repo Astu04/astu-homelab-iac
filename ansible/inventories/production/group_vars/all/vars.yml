@@ -1,0 +1,6 @@
+# group_vars/all/vars.yml
+---
+team_ssh_keys:
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHcH0DruWxAzIGyPPrYDr+Dmh3wpGZL8K7vLT57DMn16 astu@prinny01
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGtxkx35ZjEiVMfXfz+ZAyutt1VfwZt4z9dcotkmIYy2 astu@canaan
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICprqrHPUAGKXpsvNd3R11HpANhonAfnHFZNlUnFVsLa astu@lain

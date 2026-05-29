@@ -1,0 +1,32 @@
+#!/bin/bash
+source /home/pi-admin/scripts/.restic-env
+
+# 1. Mount the Target VM via SSHFS (Read-Only)
+sshfs {{ backup_user }}@{{ media_vm_ip }}:/home/astu /mnt/media_vm -o ro
+
+# Check if mount was successful
+if mountpoint -q /mnt/media_vm; then
+    echo "Mount successful. Starting backups..."
+
+    # 2. Backup Databases (Paperless Export)
+    export B2_ACCOUNT_ID=$B2_DB_ACCOUNT_ID
+    export B2_ACCOUNT_KEY=$B2_DB_ACCOUNT_KEY
+    export RESTIC_PASSWORD=$RESTIC_DB_PASSWORD
+    restic -r b2:astu-daily-dbs backup /mnt/media_vm/media-stack/paperless/export
+
+    # 3. Backup Media (Immich Library)
+    export B2_ACCOUNT_ID=$B2_MEDIA_ACCOUNT_ID
+    export B2_ACCOUNT_KEY=$B2_MEDIA_ACCOUNT_KEY
+    export RESTIC_PASSWORD=$RESTIC_MEDIA_PASSWORD
+    restic -r b2:astu-immich-media backup /mnt/media_vm/media-stack/library
+
+    # 4. Unmount safely
+    umount /mnt/media_vm
+
+    # 5. Ping Uptime Kuma for Success
+    curl "$KUMA_URL?status=up&msg=OK"
+else
+    echo "Failed to mount the Target VM!"
+    curl "$KUMA_URL?status=down&msg=MountFailed"
+    exit 1
+fi

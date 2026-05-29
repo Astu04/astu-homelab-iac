@@ -1,0 +1,18 @@
+{
+    "editor.formatOnSave": true, // Ensures nobody commits messy code
+    "editor.tabSize": 4, // Ends the Tabs vs Spaces war
+    "editor.insertSpaces": true,
+    "files.trimTrailingWhitespace": true, // Prevents useless Git diffs
+    "files.insertFinalNewline": true, // POSIX standard for files
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter"
+    },
+    "cSpell.words": [
+        "astu",
+        "homelab",
+        "moby",
+        "tamasfe",
+        "mhutchie",
+        "sshpass"
+    ]
+}

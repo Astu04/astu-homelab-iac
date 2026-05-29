@@ -1,0 +1,24 @@
+# .gitignore
+
+# --------------------------
+# Terraform Secrets & State
+# --------------------------
+*.tfvars
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# --------------------------
+# Ansible Secrets
+# --------------------------
+vault.yml
+*.retry
+
+# --------------------------
+# SSH Keys & OS Files
+# --------------------------
+*.pem
+*.key
+id_rsa
+.DS_Store

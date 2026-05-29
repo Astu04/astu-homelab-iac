@@ -1,0 +1,144 @@
+---
+- name: Ensure developers have SSH access
+  ansible.posix.authorized_key:
+    user: pi-admin
+    state: present
+    key: "{{ item }}"
+  loop: "{{ team_ssh_keys }}"
+
+- name: Install required packages
+  apt:
+    name: ["restic", "sshfs", "ufw", "curl", "cron", "parted", "cryptsetup"]
+    state: present
+    update_cache: yes
+
+# --- HARDWARE SECURE ENCRYPTION (LUKS) ---
+- name: Generate random keyfile for USB auto-unlock
+  command: dd if=/dev/urandom of=/root/usb.key bs=1024 count=4
+  args:
+    creates: /root/usb.key
+
+- name: Secure the keyfile permissions
+  file:
+    path: /root/usb.key
+    mode: "0400"
+    owner: root
+
+- name: Check if USB is already LUKS encrypted
+  command: blkid -t TYPE=crypto_LUKS {{ usb_device }}
+  register: luks_check
+  failed_when: false
+  changed_when: false
+
+- name: Format USB drive as LUKS (Destructive!)
+  command: cryptsetup -q luksFormat {{ usb_device }} /root/usb.key
+  when: luks_check.rc != 0
+
+- name: Open LUKS encrypted USB drive
+  command: cryptsetup luksOpen {{ usb_device }} {{ usb_crypt_name }} --key-file /root/usb.key
+  args:
+    creates: /dev/mapper/{{ usb_crypt_name }}
+
+- name: Ensure USB is auto-unlocked at boot via crypttab
+  community.general.crypttab:
+    name: "{{ usb_crypt_name }}"
+    backing_device: "{{ usb_device }}"
+    password: "/root/usb.key"
+    opts: luks
+    state: present
+
+- name: Format decrypted LUKS volume to ext4
+  community.general.filesystem:
+    fstype: ext4
+    dev: /dev/mapper/{{ usb_crypt_name }}
+
+- name: Mount the secure USB drive
+  ansible.posix.mount:
+    path: /mnt/usb
+    src: /dev/mapper/{{ usb_crypt_name }}
+    fstype: ext4
+    state: mounted
+# -----------------------------------------
+
+# --- MEMORY OPTIMIZATION (SWAP & CACHE) ---
+- name: Create 4GB Swapfile on SECURE USB
+  command: fallocate -l 4G /mnt/usb/swapfile
+  args:
+    creates: /mnt/usb/swapfile
+
+- name: Set correct permissions for swapfile
+  file:
+    path: /mnt/usb/swapfile
+    mode: "0600"
+    owner: root
+
+- name: Format swapfile
+  command: mkswap /mnt/usb/swapfile
+  when: not ansible_facts.mounts | selectattr('mount', 'equalto', 'none') | selectattr('device', 'equalto', '/mnt/usb/swapfile') | list
+
+- name: Enable swapfile
+  command: swapon /mnt/usb/swapfile
+  register: swapon_result
+  failed_when: swapon_result.rc != 0 and 'Device or resource busy' not in swapon_result.stderr
+  changed_when: swapon_result.rc == 0
+
+- name: Add swapfile to fstab
+  ansible.posix.mount:
+    name: none
+    src: /mnt/usb/swapfile
+    fstype: swap
+    opts: sw
+    passno: 0
+    dump: 0
+    state: present
+
+- name: Create Restic cache directory on SECURE USB
+  file:
+    path: /mnt/usb/restic_cache
+    state: directory
+    owner: pi-admin
+    mode: "0755"
+# -----------------------------------------
+
+# --- BACKUP LOGIC ---
+- name: Create mount point for the VM backup pull
+  file:
+    path: /mnt/media_vm
+    state: directory
+    owner: pi-admin
+    mode: "0755"
+
+- name: Create directory for backup scripts
+  file:
+    path: /home/pi-admin/scripts
+    state: directory
+    owner: pi-admin
+    mode: "0700"
+
+- name: Generate SSH key for the Pi
+  user:
+    name: pi-admin
+    generate_ssh_key: yes
+    ssh_key_type: ed25519
+
+- name: Deploy secure Restic environment variables
+  template:
+    src: restic-env.j2
+    dest: /home/pi-admin/scripts/.restic-env
+    owner: pi-admin
+    mode: "0400"
+
+- name: Deploy backup execution script
+  template:
+    src: backup.sh.j2
+    dest: /home/pi-admin/scripts/backup.sh
+    owner: pi-admin
+    mode: "0700"
+
+- name: Setup Cron Job for Nightly Backup
+  cron:
+    name: "Nightly Restic Backup"
+    minute: "0"
+    hour: "3"
+    user: pi-admin
+    job: "/home/pi-admin/scripts/backup.sh >> /home/pi-admin/scripts/backup.log 2>&1"

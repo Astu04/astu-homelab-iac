@@ -1,0 +1,16 @@
+# General Restic Optimizations for Pi 2 (1GB RAM)
+export RESTIC_CACHE_DIR="/mnt/usb/restic_cache"
+export GOGC=20
+
+# B2 Media Credentials
+export B2_MEDIA_ACCOUNT_ID="{{ b2_media_key_id }}"
+export B2_MEDIA_ACCOUNT_KEY="{{ b2_media_app_key }}"
+export RESTIC_MEDIA_PASSWORD="{{ restic_media_password }}"
+
+# B2 Database Credentials
+export B2_DB_ACCOUNT_ID="{{ b2_db_key_id }}"
+export B2_DB_ACCOUNT_KEY="{{ b2_db_app_key }}"
+export RESTIC_DB_PASSWORD="{{ restic_db_password }}"
+
+# Uptime Kuma Endpoint
+export KUMA_URL="{{ kuma_push_url }}"

@@ -1,0 +1,12 @@
+{
+    "recommendations": [
+        "redhat.ansible",
+        "hashicorp.terraform",
+        "ms-python.python",
+        "ms-python.black-formatter",
+        "tamasfe.even-better-toml"
+    ],
+    "unwantedRecommendations": [
+        "ms-vscode.powershell"
+    ]
+}
