@@ -8,16 +8,36 @@ sshfs {{ backup_user }}@{{ media_vm_ip }}:/home/astu /mnt/media_vm -o ro
 if mountpoint -q /mnt/media_vm; then
     echo "Mount successful. Starting backups..."
 
+    # ==========================================
     # 2. Backup Databases (Paperless Export)
+    # ==========================================
     export B2_ACCOUNT_ID=$B2_DB_ACCOUNT_ID
     export B2_ACCOUNT_KEY=$B2_DB_ACCOUNT_KEY
     export RESTIC_PASSWORD=$RESTIC_DB_PASSWORD
+
+    # Check if DB repo is initialized; if not, initialize it
+    if ! restic -r b2:astu-daily-dbs snapshots &>/dev/null; then
+        echo "Repository b2:astu-daily-dbs not initialized. Initializing now..."
+        restic -r b2:astu-daily-dbs init
+    fi
+
+    echo "Running Database backup..."
     restic -r b2:astu-daily-dbs backup /mnt/media_vm/media-stack/paperless/export
 
+    # ==========================================
     # 3. Backup Media (Immich Library)
+    # ==========================================
     export B2_ACCOUNT_ID=$B2_MEDIA_ACCOUNT_ID
     export B2_ACCOUNT_KEY=$B2_MEDIA_ACCOUNT_KEY
     export RESTIC_PASSWORD=$RESTIC_MEDIA_PASSWORD
+
+    # Check if Media repo is initialized; if not, initialize it
+    if ! restic -r b2:astu-immich-media snapshots &>/dev/null; then
+        echo "Repository b2:astu-immich-media not initialized. Initializing now..."
+        restic -r b2:astu-immich-media init
+    fi
+
+    echo "Running Media backup..."
     restic -r b2:astu-immich-media backup /mnt/media_vm/media-stack/library
 
     # 4. Unmount safely
