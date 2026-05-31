@@ -65,6 +65,7 @@
   command: fallocate -l 4G /mnt/usb/swapfile
   args:
     creates: /mnt/usb/swapfile
+  register: new_swapfile
 
 - name: Set correct permissions for swapfile
   file:
@@ -74,13 +75,7 @@
 
 - name: Format swapfile
   command: mkswap /mnt/usb/swapfile
-  when: not ansible_facts.mounts | selectattr('mount', 'equalto', 'none') | selectattr('device', 'equalto', '/mnt/usb/swapfile') | list
-
-- name: Enable swapfile
-  command: swapon /mnt/usb/swapfile
-  register: swapon_result
-  failed_when: swapon_result.rc != 0 and 'Device or resource busy' not in swapon_result.stderr
-  changed_when: swapon_result.rc == 0
+  when: new_swapfile.changed
 
 - name: Add swapfile to fstab
   ansible.posix.mount:
@@ -91,6 +86,10 @@
     passno: 0
     dump: 0
     state: present
+
+- name: Turn on swapfile
+  command: swapon /mnt/usb/swapfile
+  when: new_swapfile.changed
 
 - name: Create Restic cache directory on SECURE USB
   file:

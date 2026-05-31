@@ -38,7 +38,11 @@ if mountpoint -q /mnt/media_vm; then
     fi
 
     echo "Running Media backup..."
-    restic -r b2:astu-immich-media backup /mnt/media_vm/media-stack/library
+    restic -r b2:astu-immich-media backup /mnt/media_vm/media-stack/library \
+        --exclude="/mnt/media_vm/media-stack/library/encoded-video" \
+        --exclude="/mnt/media_vm/media-stack/library/thumbs" \
+        --exclude="/mnt/media_vm/media-stack/library/upload"
+
 
     # 4. Unmount safely
     umount /mnt/media_vm
