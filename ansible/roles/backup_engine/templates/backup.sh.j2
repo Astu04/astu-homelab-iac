@@ -1,56 +1,83 @@
 #!/bin/bash
+
+# 1. Fail fast
+set -euo pipefail
+
+# 2. CONCURRENCY LOCK (flock)
+# This strictly prevents a second instance of the script from running.
+# It opens file descriptor 200, and tries to get an exclusive lock.
+# If it fails (-n), it silently exits so cron doesn't spam you with emails.
+exec 200>/tmp/restic_backup.lock
+if ! flock -n 200; then
+    echo "$(date): Another backup is currently running. Skipping this execution."
+    exit 0
+fi
+
+# Load Environment Variables
 source /home/pi-admin/scripts/.restic-env
 
-# 1. Mount the Target VM via SSHFS (Read-Only)
-sshfs {{ backup_user }}@{{ media_vm_ip }}:/home/astu /mnt/media_vm -o ro
+MOUNT_POINT="/mnt/media_vm"
 
-# Check if mount was successful
-if mountpoint -q /mnt/media_vm; then
-    echo "Mount successful. Starting backups..."
-
-    # ==========================================
-    # 2. Backup Databases (Paperless Export)
-    # ==========================================
-    export B2_ACCOUNT_ID=$B2_DB_ACCOUNT_ID
-    export B2_ACCOUNT_KEY=$B2_DB_ACCOUNT_KEY
-    export RESTIC_PASSWORD=$RESTIC_DB_PASSWORD
-
-    # Check if DB repo is initialized; if not, initialize it
-    if ! restic -r b2:astu-daily-dbs snapshots &>/dev/null; then
-        echo "Repository b2:astu-daily-dbs not initialized. Initializing now..."
-        restic -r b2:astu-daily-dbs init
+# 3. Ensure unmount happens no matter what
+# This function is guaranteed to run when the script exits (success, failure, or even if you Ctrl+C it).
+cleanup() {
+    echo "Cleaning up..."
+    if mountpoint -q "$MOUNT_POINT"; then
+        echo "Unmounting $MOUNT_POINT safely..."
+        umount "$MOUNT_POINT" || echo "Failed to unmount. Please check manually."
     fi
+}
+trap cleanup EXIT
 
-    echo "Running Database backup..."
-    restic -r b2:astu-daily-dbs backup /mnt/media_vm/media-stack/paperless/export
+# ---------------------------------------------------------
+# SCRIPT LOGIC
+# ---------------------------------------------------------
 
-    # ==========================================
-    # 3. Backup Media (Immich Library)
-    # ==========================================
-    export B2_ACCOUNT_ID=$B2_MEDIA_ACCOUNT_ID
-    export B2_ACCOUNT_KEY=$B2_MEDIA_ACCOUNT_KEY
-    export RESTIC_PASSWORD=$RESTIC_MEDIA_PASSWORD
+echo "$(date): Starting Backup Routine"
 
-    # Check if Media repo is initialized; if not, initialize it
-    if ! restic -r b2:astu-immich-media snapshots &>/dev/null; then
-        echo "Repository b2:astu-immich-media not initialized. Initializing now..."
-        restic -r b2:astu-immich-media init
-    fi
-
-    echo "Running Media backup..."
-    restic -r b2:astu-immich-media backup /mnt/media_vm/media-stack/library \
-        --exclude="/mnt/media_vm/media-stack/library/encoded-video" \
-        --exclude="/mnt/media_vm/media-stack/library/thumbs" \
-        --exclude="/mnt/media_vm/media-stack/library/upload"
-
-
-    # 4. Unmount safely
-    umount /mnt/media_vm
-
-    # 5. Ping Uptime Kuma for Success
-    curl "$KUMA_URL?status=up&msg=OK"
-else
-    echo "Failed to mount the Target VM!"
-    curl "$KUMA_URL?status=down&msg=MountFailed"
-    exit 1
+# Mount SSHFS if not already mounted
+if ! mountpoint -q "$MOUNT_POINT"; then
+    echo "Mounting Target VM..."
+    sshfs {{ backup_user }}@{{ media_vm_ip }}:/home/astu "$MOUNT_POINT" -o ro
 fi
+
+# ==========================================
+# Backup Databases (Paperless Export)
+# ==========================================
+export B2_ACCOUNT_ID=$B2_DB_ACCOUNT_ID
+export B2_ACCOUNT_KEY=$B2_DB_ACCOUNT_KEY
+export RESTIC_PASSWORD=$RESTIC_DB_PASSWORD
+
+if ! restic -r b2:astu-daily-dbs snapshots &>/dev/null; then
+    echo "Initializing DB Repository..."
+    restic -r b2:astu-daily-dbs init
+fi
+
+echo "Running Database backup..."
+restic -r b2:astu-daily-dbs backup "$MOUNT_POINT/media-stack/paperless/export"
+
+# ==========================================
+# Backup Media (Immich)
+# ==========================================
+export B2_ACCOUNT_ID=$B2_MEDIA_ACCOUNT_ID
+export B2_ACCOUNT_KEY=$B2_MEDIA_ACCOUNT_KEY
+export RESTIC_PASSWORD=$RESTIC_MEDIA_PASSWORD
+
+if ! restic -r b2:astu-immich-media snapshots &>/dev/null; then
+    echo "Initializing Media Repository..."
+    restic -r b2:astu-immich-media init
+fi
+
+echo "Running Media backup..."
+restic -r b2:astu-immich-media backup "$MOUNT_POINT/media-stack/library" \
+    --exclude="$MOUNT_POINT/media-stack/library/encoded-video" \
+    --exclude="$MOUNT_POINT/media-stack/library/thumbs"
+
+# Clean old snapshots (Keep last 7 daily, 4 weekly, 6 monthly)
+echo "Pruning old Media backups..."
+restic -r b2:astu-immich-media forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
+
+# Ping Uptime Kuma for Success
+curl -fsS -m 10 --retry 3 "$KUMA_URL?status=up&msg=OK" > /dev/null
+
+echo "$(date): Backup Routine Completed Successfully."
