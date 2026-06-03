@@ -78,6 +78,6 @@ echo "Pruning old Media backups..."
 restic -r b2:astu-immich-media forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
 
 # Ping Uptime Kuma for Success
-curl -fsS -m 10 --retry 3 "$KUMA_URL?status=up&msg=OK" > /dev/null
+curl -fsS -m 10 --retry 3 "$KUMA_URL?status=up&msg=OK" > /dev/null || echo "Warning: Failed to ping Uptime Kuma, but backup succeeded."
 
 echo "$(date): Backup Routine Completed Successfully."
