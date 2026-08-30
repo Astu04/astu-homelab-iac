@@ -1,0 +1,17 @@
+title = "Repository Secrets Governance Baseline"
+
+[allowlist]
+description = "Ignore Ansible Vault, public keys, and IaC lockfiles"
+paths = [
+    '''(^|/)docs/.*''',
+    '''(^|/)\.terraform/.*''',
+    '''(^|/)\.terraform\.lock\.hcl$''',
+    '''ansible/inventories/.*/group_vars/.*''',
+    '''\.vault$''',
+]
+regexes = [
+    '''(?i)EXAMPLE[_-]?KEY''',
+    '''(?i)CHANGE[_-]?ME''',
+    '''\$ANSIBLE_VAULT;1\.1;AES256''',
+    '''ssh-ed25519 AAAAC3NzaC1lZDI1NTE5''',
+]

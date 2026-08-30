@@ -1,20 +1,20 @@
 repos:
-  # 1. Betterleaks: Next-Gen Secret & Token Scanner
+  # 1. Secret Scanning (Shift-Left Security Gate)
   - repo: https://github.com/betterleaks/betterleaks
     rev: v1.8.1
     hooks:
       - id: betterleaks
 
-  # 2. Terraform / OpenTofu Format & Linting
+  # 2. OpenTofu / Terraform Format & Linting
   - repo: https://github.com/antonbabenko/pre-commit-terraform
     rev: v1.109.0
     hooks:
       - id: terraform_fmt
       - id: terraform_tflint
         args:
-          - --args=--config=.tflint.hcl
+          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
 
-  # 3. Checkov: Policy-as-Code & Compliance (CIS / NIST)
+  # 3. Policy-as-Code & IaC Compliance (CIS / NIST / SOC 2)
   - repo: https://github.com/bridgecrewio/checkov
     rev: 3.3.15
     hooks:
