@@ -1,0 +1,40 @@
+{
+    "name": "astu-homelab-iac",
+    // 1. Build from your custom Dockerfile
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    // 2. Dev Container Features (Docker-in-Docker & Terraform fallback)
+    "features": {
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {
+            "version": "latest",
+            "moby": true
+        },
+        "ghcr.io/devcontainers/features/terraform:1": {
+            "version": "latest"
+        }
+    },
+    // 3. Environment Variables
+    "containerEnv": {
+        "EDITOR": "nano"
+    },
+    // 4. VS Code Customizations & Extensions
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "editor.formatOnSave": true
+            },
+            "extensions": [
+                "redhat.ansible",
+                "ms-azuretools.vscode-docker",
+                "hashicorp.terraform",
+                "tamasfe.even-better-toml",
+                "mhutchie.git-graph",
+                "bridgecrew.checkov"
+            ]
+        }
+    },
+    // 5. Lifecycle hook: arm Git pre-commit hooks when container mounts workspace
+    "postCreateCommand": "pre-commit install || true"
+}

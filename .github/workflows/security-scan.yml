@@ -1,0 +1,77 @@
+name: "Shift-Left Security & Compliance Gate"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+  security-events: write # Required for SARIF upload to GitHub Security Tab
+  actions: read
+
+jobs:
+  secret-scan:
+    name: "Secrets Detection (Betterleaks)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Full git history required for secret scanning
+
+      - name: Install Betterleaks
+        run: |
+          curl -sSL https://github.com/betterleaks/betterleaks/releases/latest/download/betterleaks_linux_amd64.tar.gz | tar -xz
+          sudo mv betterleaks /usr/local/bin/
+
+      - name: Run Betterleaks Scan
+        run: |
+          betterleaks git . \
+            --config .betterleaks.toml \
+            --report-format sarif \
+            --report-path betterleaks-results.sarif \
+            -v
+
+      - name: Upload Betterleaks SARIF to GitHub Security Tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: betterleaks-results.sarif
+          category: betterleaks
+
+  iac-governance:
+    name: "IaC Static Analysis & Compliance"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: Init & Run TFLint
+        run: |
+          tflint --init
+          tflint -f compact
+
+      - name: Run Checkov Compliance Scan (NIST / CIS / SOC 2)
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: tofu/
+          framework: terraform
+          output_format: cli,sarif
+          output_file_path: console,checkov-results.sarif
+          compact: true
+          quiet: true
+          soft_fail: false
+
+      - name: Upload Checkov SARIF to GitHub Security Tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: checkov-results.sarif
+          category: checkov
