@@ -24,3 +24,10 @@ repos:
           - --framework=terraform
           - --compact
           - --quiet
+
+  # 4. GitHub Actions & Dependabot Schema Validator
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.38.0
+    hooks:
+      - id: check-dependabot
+      - id: check-github-workflows

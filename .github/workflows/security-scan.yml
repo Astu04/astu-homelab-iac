@@ -2,29 +2,44 @@ name: "Shift-Left Security & Compliance Gate"
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".gitignore"
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".gitignore"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
-  security-events: write # Required for SARIF upload to GitHub Security Tab
-  actions: read
+  security-events: write
 
 jobs:
-  secret-scan:
-    name: "Secrets Detection (Betterleaks)"
+  security-and-compliance:
+    name: "Security & IaC Compliance Gate"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Full git history required for secret scanning
+          fetch-depth: 0
 
+      # 1. Secret Scanning
       - name: Install Betterleaks
         run: |
-          curl -sSL https://github.com/betterleaks/betterleaks/releases/latest/download/betterleaks_linux_amd64.tar.gz | tar -xz
+          curl -sSLf https://github.com/betterleaks/betterleaks/releases/download/v1.8.1/betterleaks_1.8.1_linux_x64.tar.gz -o betterleaks.tar.gz
+          tar -xzf betterleaks.tar.gz
           sudo mv betterleaks /usr/local/bin/
+          rm -f betterleaks.tar.gz
+          betterleaks --version
 
       - name: Run Betterleaks Scan
         run: |
@@ -34,32 +49,20 @@ jobs:
             --report-path betterleaks-results.sarif \
             -v
 
-      - name: Upload Betterleaks SARIF to GitHub Security Tab
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: betterleaks-results.sarif
-          category: betterleaks
-
-  iac-governance:
-    name: "IaC Static Analysis & Compliance"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
+      # 2. OpenTofu Static Analysis (TFLint)
       - name: Setup TFLint
         uses: terraform-linters/setup-tflint@v4
         with:
-          tflint_version: latest
+          tflint_version: "v0.54.0"
 
       - name: Init & Run TFLint
         run: |
           tflint --init
-          tflint -f compact
+          tflint --recursive -f compact
 
-      - name: Run Checkov Compliance Scan (NIST / CIS / SOC 2)
-        uses: bridgecrewio/checkov-action@master
+      # 3. Policy-as-Code (Checkov)
+      - name: Run Checkov Compliance Scan
+        uses: bridgecrewio/checkov-action@v12.2946.0
         with:
           directory: tofu/
           framework: terraform
@@ -69,8 +72,16 @@ jobs:
           quiet: true
           soft_fail: false
 
-      - name: Upload Checkov SARIF to GitHub Security Tab
-        uses: github/codeql-action/upload-sarif@v3
+      # 4. Upload SARIF to GitHub Security Tab
+      - name: Upload Betterleaks SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: betterleaks-results.sarif
+          category: betterleaks
+
+      - name: Upload Checkov SARIF
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: checkov-results.sarif

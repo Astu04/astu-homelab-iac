@@ -1,6 +1,25 @@
 version: 2
 updates:
-  - package-ecosystem: "" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  # 1. Automatically update GitHub Actions in workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # 2. Keep Dev Container features & configuration up to date
+  - package-ecosystem: "devcontainers"
+    directory: "/.devcontainer"
+    schedule:
+      interval: "weekly"
+
+  # 3. Keep Dockerfile base images up to date
+  - package-ecosystem: "docker"
+    directory: "/.devcontainer"
+    schedule:
+      interval: "weekly"
+
+  # 4. Keep OpenTofu providers & modules up to date
+  - package-ecosystem: "opentofu"
+    directory: "/tofu/environments/backblaze"
     schedule:
       interval: "weekly"
